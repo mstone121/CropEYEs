@@ -4,7 +4,7 @@ from glob import glob
 from tqdm import tqdm
 import numpy as np
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_validate
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 data_dir = "data"
@@ -20,7 +20,7 @@ output.write(
     "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
 )
 
-model = LinearDiscriminantAnalysis()
+model = LinearDiscriminantAnalysis(solver="lsqr")
 
 for folder in glob(path_join(data_dir, "*")):
     crop_type = basename(folder)
@@ -51,13 +51,16 @@ for folder in glob(path_join(data_dir, "*")):
         )
         x = np.transpose(x)
 
-        x_train, x_test, y_train, y_test = train_test_split(x, y, train_size=0.7)
-
-        model.fit(x_train, y_train)
-
-        accuracy = model.score(x_train, y_train)
-        val_accuracy = model.score(x_test, y_test)
+        scores = cross_validate(
+            model, x, y, scoring="accuracy", return_train_score=True
+        )
 
         output.write(
-            "%s,%s,%s,%s\n" % (crop_type, basename(csv), accuracy, val_accuracy)
+            "%s,%s,%s,%s\n"
+            % (
+                crop_type,
+                basename(csv),
+                np.mean(scores["train_score"]),
+                np.mean(scores["test_score"]),
+            )
         )
