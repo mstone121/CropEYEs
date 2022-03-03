@@ -26,10 +26,7 @@ for folder in glob(path_join(data_dir, "*")):
     crop_type = basename(folder)
 
     csvs = glob(path_join(folder, "**", "*.csv"), recursive=True)
-    csv_count = len(csvs)
-    for index in tqdm(range(csv_count), desc="Training with %s" % crop_type):
-        csv = csvs[index]
-
+    for csv in tqdm(csvs, desc="Training with %s" % crop_type):
         *x, y = np.loadtxt(
             csv,
             delimiter=",",
