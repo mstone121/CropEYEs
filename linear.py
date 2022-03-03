@@ -22,6 +22,9 @@ output.write(
 
 model = LinearDiscriminantAnalysis(solver="lsqr")
 
+all_training_accuracies = []
+all_test_accuracies = []
+
 for folder in glob(path_join(data_dir, "*")):
     crop_type = basename(folder)
 
@@ -52,12 +55,21 @@ for folder in glob(path_join(data_dir, "*")):
             model, x, y, scoring="accuracy", return_train_score=True
         )
 
+        train_accuracy = np.mean(scores["train_score"])
+        test_accuracy = np.mean(scores["test_score"])
+
+        all_training_accuracies.append(train_accuracy)
+        all_test_accuracies.append(test_accuracy)
+
         output.write(
             "%s,%s,%s,%s\n"
             % (
                 crop_type,
                 basename(csv),
-                np.mean(scores["train_score"]),
-                np.mean(scores["test_score"]),
+                train_accuracy,
+                test_accuracy,
             )
         )
+
+print("Overall training accuracy: %f" % np.mean(all_training_accuracies))
+print("Overall test accuracy: %f" % np.mean(all_test_accuracies))
