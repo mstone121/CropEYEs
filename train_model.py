@@ -21,9 +21,9 @@ classifier = LogisticRegression
 
 
 class Configuration:
-    polynomial_degrees = 1
-    cv_splits = 2
-    cv_repeats = 1
+    polynomial_degrees = 3
+    cv_splits = 5
+    cv_repeats = 3
 
 
 def configuration_lines():
@@ -47,6 +47,10 @@ output.write(
     "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
 )
 
+cv = RepeatedStratifiedKFold(
+    n_splits=Configuration.cv_splits, n_repeats=Configuration.cv_repeats
+)
+
 model = Pipeline(
     (
         ["polynomial", PolynomialFeatures(degree=Configuration.polynomial_degrees)],
@@ -55,9 +59,6 @@ model = Pipeline(
     )
 )
 
-cv = RepeatedStratifiedKFold(
-    n_splits=Configuration.cv_splits, n_repeats=Configuration.cv_repeats
-)
 
 all_training_accuracies = []
 all_test_accuracies = []
