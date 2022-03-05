@@ -1,12 +1,9 @@
 from datetime import datetime
 from os.path import join as path_join, basename
 from glob import glob
-
-
 from tqdm import tqdm
 import numpy as np
 from joblib import dump as model_dump
-
 
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
@@ -21,22 +18,10 @@ classifier = LogisticRegression
 
 
 class Configuration:
+    random_seed = 27
     polynomial_degrees = 3
     cv_splits = 5
-    cv_repeats = 5
-
-    # LogisticRegression
-    penalty = "l2"
-    solver = "liblinear"
-    C = 10
-
-
-def configuration_lines():
-    return [
-        f"{key}: {value}"
-        for key, value in vars(Configuration).items()
-        if not key.startswith("__")
-    ]
+    cv_repeats = 20
 
 
 def get_bool_value(value):
@@ -53,21 +38,16 @@ output.write(
 )
 
 cv = RepeatedStratifiedKFold(
-    n_splits=Configuration.cv_splits, n_repeats=Configuration.cv_repeats
+    n_splits=Configuration.cv_splits,
+    n_repeats=Configuration.cv_repeats,
+    random_state=Configuration.random_seed,
 )
 
 model = Pipeline(
     (
         ["polynomial", PolynomialFeatures(degree=Configuration.polynomial_degrees)],
         ["scaler", StandardScaler()],
-        [
-            "model",
-            classifier(
-                penalty=Configuration.penalty,
-                C=Configuration.C,
-                solver=Configuration.solver,
-            ),
-        ],
+        ["classifier", classifier()],
     )
 )
 
@@ -134,9 +114,13 @@ for folder in glob(path_join(data_dir, "*")):
 
 model_dump(model, path_join(models_dir, "%s.model" % date_filename()))
 
-summary_string = (
+summary_strings = (
     ["%s Model" % classifier.__name__, date_filename()]
-    + configuration_lines()
+    + [
+        f"{key}: {value}"
+        for key, value in vars(Configuration).items()
+        if not key.startswith("__")
+    ]
     + [
         "Overall training accuracy: %f (%f)"
         % (np.mean(all_training_accuracies), np.std(all_training_accuracies)),
@@ -148,11 +132,11 @@ summary_string = (
 )
 
 print()
-for line in summary_string:
+for line in summary_strings:
     print(line)
 
 summary = open(path_join("results", "summary.txt"), "a")
-summary.write("\n".join(summary_string))
+summary.write("\n".join(summary_strings))
 
 output.close()
 summary.close()
