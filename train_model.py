@@ -11,12 +11,27 @@ from joblib import dump as model_dump
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler, PolynomialFeatures
-from sklearn.model_selection import RepeatedKFold, cross_validate
-
+from sklearn.model_selection import RepeatedStratifiedKFold, cross_validate
 
 data_dir = "data"
 results_dir = "results"
 models_dir = "models"
+
+classifier = LogisticRegression
+
+
+class Configuration:
+    polynomial_degrees = 1
+    cv_splits = 2
+    cv_repeats = 1
+
+
+def configuration_lines():
+    return [
+        f"{key}: {value}"
+        for key, value in vars(Configuration).items()
+        if not key.startswith("__")
+    ]
 
 
 def get_bool_value(value):
@@ -34,13 +49,15 @@ output.write(
 
 model = Pipeline(
     (
-        ["polynomial", PolynomialFeatures(degree=2)],
+        ["polynomial", PolynomialFeatures(degree=Configuration.polynomial_degrees)],
         ["scaler", StandardScaler()],
-        ["linear_analysis", LogisticRegression()],
+        ["model", classifier()],
     )
 )
 
-cv = RepeatedKFold()
+cv = RepeatedStratifiedKFold(
+    n_splits=Configuration.cv_splits, n_repeats=Configuration.cv_repeats
+)
 
 all_training_accuracies = []
 all_test_accuracies = []
@@ -71,9 +88,20 @@ for folder in glob(path_join(data_dir, "*")):
         )
         x = np.transpose(x)
 
-        scores = cross_validate(
-            model, x, y, scoring="accuracy", return_train_score=True, cv=cv
-        )
+        try:
+            scores = cross_validate(
+                model,
+                x,
+                y,
+                scoring="accuracy",
+                return_train_score=True,
+                cv=cv,
+                error_score="raise",
+            )
+        except Exception as error:
+            print(error)
+            print(csv)
+            exit()
 
         train_accuracy = np.mean(scores["train_score"])
         test_accuracy = np.mean(scores["test_score"])
@@ -91,13 +119,27 @@ for folder in glob(path_join(data_dir, "*")):
             )
         )
 
-print(
-    "Overall training accuracy: %f (%f)"
-    % (np.mean(all_training_accuracies), np.std(all_training_accuracies))
-)
-print(
-    "Overall test accuracy: %f (%f)"
-    % (np.mean(all_test_accuracies), np.std(all_test_accuracies))
+model_dump(model, path_join(models_dir, "%s.model" % date_filename()))
+
+summary_string = (
+    ["%s Model" % classifier.__name__, date_filename()]
+    + configuration_lines()
+    + [
+        "Overall training accuracy: %f (%f)"
+        % (np.mean(all_training_accuracies), np.std(all_training_accuracies)),
+        "Overall test accuracy: %f (%f)"
+        % (np.mean(all_test_accuracies), np.std(all_test_accuracies)),
+        "=" * 10,
+        "",
+    ]
 )
 
-model_dump(model, path_join(models_dir, "%s.model" % date_filename()))
+print()
+for line in summary_string:
+    print(line)
+
+summary = open(path_join("results", "summary.txt"), "a")
+summary.write("\n".join(summary_string))
+
+output.close()
+summary.close()
