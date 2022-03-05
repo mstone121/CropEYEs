@@ -23,7 +23,12 @@ classifier = LogisticRegression
 class Configuration:
     polynomial_degrees = 3
     cv_splits = 5
-    cv_repeats = 3
+    cv_repeats = 5
+
+    # LogisticRegression
+    penalty = "l2"
+    solver = "liblinear"
+    C = 10
 
 
 def configuration_lines():
@@ -55,7 +60,14 @@ model = Pipeline(
     (
         ["polynomial", PolynomialFeatures(degree=Configuration.polynomial_degrees)],
         ["scaler", StandardScaler()],
-        ["model", classifier()],
+        [
+            "model",
+            classifier(
+                penalty=Configuration.penalty,
+                C=Configuration.C,
+                solver=Configuration.solver,
+            ),
+        ],
     )
 )
 
