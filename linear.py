@@ -3,19 +3,25 @@ from os.path import join as path_join, basename
 from glob import glob
 from tqdm import tqdm
 import numpy as np
+from joblib import dump as model_dump
 
 from sklearn.model_selection import cross_validate
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 data_dir = "data"
 results_dir = "results"
+models_dir = "models"
 
 
 def get_bool_value(value):
     return value == b"True"
 
 
-output = open(path_join("results", "%s.csv" % datetime.now()), "w")
+def date_filename():
+    return datetime.now().strftime(r"%Y-%m-%d_%H-%M-%S")
+
+
+output = open(path_join("results", "%s.csv" % date_filename()), "w")
 output.write(
     "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
 )
@@ -71,5 +77,13 @@ for folder in glob(path_join(data_dir, "*")):
             )
         )
 
-print("Overall training accuracy: %f" % np.mean(all_training_accuracies))
-print("Overall test accuracy: %f" % np.mean(all_test_accuracies))
+print(
+    "Overall training accuracy: %f (%f)"
+    % (np.mean(all_training_accuracies), np.std(all_training_accuracies))
+)
+print(
+    "Overall test accuracy: %f (%f)"
+    % (np.mean(all_test_accuracies), np.std(all_test_accuracies))
+)
+
+model_dump(model, path_join(models_dir, "%s.model" % date_filename()))
