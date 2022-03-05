@@ -1,12 +1,18 @@
 from datetime import datetime
 from os.path import join as path_join, basename
 from glob import glob
+
+
 from tqdm import tqdm
 import numpy as np
 from joblib import dump as model_dump
 
-from sklearn.model_selection import cross_validate
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler, PolynomialFeatures
+from sklearn.model_selection import RepeatedKFold, cross_validate
+
 
 data_dir = "data"
 results_dir = "results"
@@ -26,7 +32,15 @@ output.write(
     "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
 )
 
-model = LinearDiscriminantAnalysis(solver="lsqr")
+model = Pipeline(
+    (
+        ["polynomial", PolynomialFeatures(degree=2)],
+        ["scaler", StandardScaler()],
+        ["linear_analysis", LogisticRegression()],
+    )
+)
+
+cv = RepeatedKFold()
 
 all_training_accuracies = []
 all_test_accuracies = []
@@ -58,7 +72,7 @@ for folder in glob(path_join(data_dir, "*")):
         x = np.transpose(x)
 
         scores = cross_validate(
-            model, x, y, scoring="accuracy", return_train_score=True
+            model, x, y, scoring="accuracy", return_train_score=True, cv=cv
         )
 
         train_accuracy = np.mean(scores["train_score"])
