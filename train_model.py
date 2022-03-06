@@ -8,7 +8,7 @@ from joblib import dump as model_dump
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler, PolynomialFeatures
-from sklearn.model_selection import RepeatedStratifiedKFold, cross_validate
+from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold
 
 data_dir = "data"
 results_dir = "results"
@@ -20,8 +20,11 @@ classifier = LogisticRegression
 class Configuration:
     random_seed = 27
     polynomial_degrees = 3
-    cv_splits = 5
-    cv_repeats = 20
+    cv_splits = 2
+    cv_repeats = 1
+
+
+param_grid = {}
 
 
 def get_bool_value(value):
@@ -32,31 +35,31 @@ def date_filename():
     return datetime.now().strftime(r"%Y-%m-%d_%H-%M-%S")
 
 
-output = open(path_join("results", "%s.csv" % date_filename()), "w")
-output.write(
-    "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
-)
-
 cv = RepeatedStratifiedKFold(
     n_splits=Configuration.cv_splits,
     n_repeats=Configuration.cv_repeats,
     random_state=Configuration.random_seed,
 )
 
-model = Pipeline(
-    (
-        ["polynomial", PolynomialFeatures(degree=Configuration.polynomial_degrees)],
-        ["scaler", StandardScaler()],
-        ["classifier", classifier()],
-    )
+model = GridSearchCV(
+    Pipeline(
+        (
+            ["polynomial", PolynomialFeatures(degree=Configuration.polynomial_degrees)],
+            ["scaler", StandardScaler()],
+            ["classifier", classifier(max_iter=1000)],
+        ),
+    ),
+    param_grid=param_grid,
+    cv=cv,
+    return_train_score=True,
 )
 
 
-all_training_accuracies = []
-all_test_accuracies = []
+accuracy = {}
 
 for folder in glob(path_join(data_dir, "*")):
     crop_type = basename(folder)
+    crop_accuracy = {}
 
     csvs = glob(path_join(folder, "**", "*.csv"), recursive=True)
     for csv in tqdm(csvs, desc="Training with %s" % crop_type):
@@ -81,38 +84,37 @@ for folder in glob(path_join(data_dir, "*")):
         )
         x = np.transpose(x)
 
-        try:
-            scores = cross_validate(
-                model,
-                x,
-                y,
-                scoring="accuracy",
-                return_train_score=True,
-                cv=cv,
-                error_score="raise",
-            )
-        except Exception as error:
-            print(error)
-            print(csv)
-            exit()
+        model.fit(x, y)
+        crop_accuracy[basename(csv)] = [
+            model.cv_results_["mean_train_score"],
+            model.cv_results_["mean_test_score"],
+        ]
 
-        train_accuracy = np.mean(scores["train_score"])
-        test_accuracy = np.mean(scores["test_score"])
+    accuracy[crop_type] = crop_accuracy
 
-        all_training_accuracies.append(train_accuracy)
-        all_test_accuracies.append(test_accuracy)
-
-        output.write(
-            "%s,%s,%s,%s\n"
-            % (
-                crop_type,
-                basename(csv),
-                train_accuracy,
-                test_accuracy,
-            )
-        )
 
 model_dump(model, path_join(models_dir, "%s.model" % date_filename()))
+
+
+all_train_accuracies = []
+all_test_accuracies = []
+with open(path_join("results", "%s.csv" % date_filename()), "w") as output:
+    output.write(
+        "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
+    )
+
+    for crop_type, crop_accuracy in accuracy.items():
+        for csv, csv_accuracy in crop_accuracy.items():
+            train_accuracy = csv_accuracy[0][model.best_index_]
+            test_accuracy = csv_accuracy[1][model.best_index_]
+
+            all_train_accuracies.append(train_accuracy)
+            all_test_accuracies.append(test_accuracy)
+
+            output.write(
+                "%s,%s,%s,%s\n" % (crop_type, csv, train_accuracy, test_accuracy)
+            )
+
 
 summary_strings = (
     ["%s Model" % classifier.__name__, date_filename()]
@@ -122,21 +124,21 @@ summary_strings = (
         if not key.startswith("__")
     ]
     + [
+        "",
         "Overall training accuracy: %f (%f)"
-        % (np.mean(all_training_accuracies), np.std(all_training_accuracies)),
+        % (np.mean(all_train_accuracies), np.std(all_train_accuracies)),
         "Overall test accuracy: %f (%f)"
         % (np.mean(all_test_accuracies), np.std(all_test_accuracies)),
-        "=" * 10,
         "",
+        "Best Parameters:",
     ]
+    + [f"{key}: {value}" for key, value in model.best_params_]
+    + ["", "=" * 10, "", ""]
 )
 
 print()
 for line in summary_strings:
     print(line)
 
-summary = open(path_join("results", "summary.txt"), "a")
-summary.write("\n".join(summary_strings))
-
-output.close()
-summary.close()
+with open(path_join("results", "summary.txt"), "a") as summary:
+    summary.write("\n".join(summary_strings))
