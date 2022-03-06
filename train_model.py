@@ -19,16 +19,14 @@ classifier = SVC
 
 class Configuration:
     random_seed = 27
-    cv_splits = 2
-    cv_repeats = 1
-
-    polynomial_degrees = 3
+    cv_splits = 3
+    cv_repeats = 3
 
 
 param_grid = {
-    "classifier__degree": [3],
-    "classifier__coef0": [0.1, 0.5, 1],
-    "classifier__C": [0.1, 0.5, 1],
+    "classifier__degree": [5],
+    "classifier__coef0": [0.6],
+    "classifier__C": [0.5],
 }
 
 
@@ -58,6 +56,7 @@ model = GridSearchCV(
     param_grid=param_grid,
     cv=cv,
     return_train_score=True,
+    n_jobs=-1,
 )
 
 
@@ -99,12 +98,12 @@ for folder in glob(path_join(data_dir, "*")):
     accuracy[crop_type] = crop_accuracy
 
 
-model_dump(model, path_join(models_dir, "%s.model" % run_datetime()))
+model_dump(model, path_join(models_dir, "%s.model" % run_datetime))
 
 
 all_train_accuracies = []
 all_test_accuracies = []
-with open(path_join("results", "%s.csv" % run_datetime()), "w") as output:
+with open(path_join("results", "%s.csv" % run_datetime), "w") as output:
     output.write(
         "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
     )
@@ -123,7 +122,7 @@ with open(path_join("results", "%s.csv" % run_datetime()), "w") as output:
 
 
 summary_strings = (
-    ["%s Model" % classifier.__name__, run_datetime()]
+    ["%s Model" % classifier.__name__, run_datetime]
     + [
         f"{key}: {value}"
         for key, value in vars(Configuration).items()
