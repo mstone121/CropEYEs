@@ -1,32 +1,43 @@
 from datetime import datetime
 from os.path import join as path_join, basename
 from glob import glob
-from sklearn.svm import SVC
+
+
 from tqdm import tqdm
 import numpy as np
 from joblib import dump as model_dump
 
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler, PolynomialFeatures
-from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.model_selection import (
+    GridSearchCV,
+    RepeatedStratifiedKFold,
+    cross_validate,
+)
+from sklearn.linear_model import LogisticRegression
 
 data_dir = "data"
 results_dir = "results"
 models_dir = "models"
 
-classifier = SVC
+classifier = LogisticRegression
 
 
 class Configuration:
     random_seed = 27
-    cv_splits = 3
-    cv_repeats = 3
+
+    hyper_cv_splits = 2
+    hyper_cv_repeats = 1
+
+    test_cv_splits = 2
+    test_cv_repeats = 1
+
+    solver = "lbfgs"
 
 
 param_grid = {
-    "classifier__degree": [5],
-    "classifier__coef0": [0.6],
-    "classifier__C": [0.5],
+    "classifier__C": [1],
+    "polynomial__degree": [3],
 }
 
 
@@ -37,30 +48,42 @@ def get_bool_value(value):
 run_datetime = datetime.now().strftime(r"%Y-%m-%d_%H-%M-%S")
 
 
-cv = RepeatedStratifiedKFold(
-    n_splits=Configuration.cv_splits,
-    n_repeats=Configuration.cv_repeats,
+hyper_cv = RepeatedStratifiedKFold(
+    n_splits=Configuration.hyper_cv_splits,
+    n_repeats=Configuration.hyper_cv_repeats,
+    random_state=Configuration.random_seed,
+)
+
+test_cv = RepeatedStratifiedKFold(
+    n_splits=Configuration.test_cv_splits,
+    n_repeats=Configuration.test_cv_repeats,
     random_state=Configuration.random_seed,
 )
 
 model = GridSearchCV(
     Pipeline(
         [
+            ("polynomial", PolynomialFeatures()),
             ("scaler", StandardScaler()),
             (
                 "classifier",
-                classifier(kernel="poly", max_iter=100000),
+                classifier(solver=Configuration.solver, max_iter=10000),
             ),
         ],
     ),
     param_grid=param_grid,
-    cv=cv,
-    return_train_score=True,
+    cv=hyper_cv,
     n_jobs=-1,
 )
 
 
-accuracy = {}
+output = open(path_join("results", "%s.csv" % run_datetime), "w")
+output.write(
+    "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
+)
+
+all_train_accuracies = []
+all_test_accuracies = []
 
 for folder in glob(path_join(data_dir, "*")):
     crop_type = basename(folder)
@@ -89,37 +112,42 @@ for folder in glob(path_join(data_dir, "*")):
         )
         x = np.transpose(x)
 
-        model.fit(x, y)
-        crop_accuracy[basename(csv)] = [
-            model.cv_results_["mean_train_score"],
-            model.cv_results_["mean_test_score"],
-        ]
+        try:
+            scores = cross_validate(
+                model,
+                x,
+                y,
+                scoring="accuracy",
+                return_train_score=True,
+                cv=test_cv,
+                error_score="raise",
+                n_jobs=-1,
+            )
+        except Exception as error:
+            print(error)
+            print(csv)
+            exit()
 
-    accuracy[crop_type] = crop_accuracy
+        train_accuracy = np.mean(scores["train_score"])
+        test_accuracy = np.mean(scores["test_score"])
+
+        all_train_accuracies.append(train_accuracy)
+        all_test_accuracies.append(test_accuracy)
+
+        output.write(
+            "%s,%s,%s,%s\n"
+            % (
+                crop_type,
+                basename(csv),
+                train_accuracy,
+                test_accuracy,
+            )
+        )
 
 
 model_dump(model, path_join(models_dir, "%s.model" % run_datetime))
 
-
-all_train_accuracies = []
-all_test_accuracies = []
-with open(path_join("results", "%s.csv" % run_datetime), "w") as output:
-    output.write(
-        "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
-    )
-
-    for crop_type, crop_accuracy in accuracy.items():
-        for csv, csv_accuracy in crop_accuracy.items():
-            train_accuracy = csv_accuracy[0][model.best_index_]
-            test_accuracy = csv_accuracy[1][model.best_index_]
-
-            all_train_accuracies.append(train_accuracy)
-            all_test_accuracies.append(test_accuracy)
-
-            output.write(
-                "%s,%s,%s,%s\n" % (crop_type, csv, train_accuracy, test_accuracy)
-            )
-
+output.close()
 
 summary_strings = (
     ["%s Model" % classifier.__name__, run_datetime]
@@ -137,7 +165,10 @@ summary_strings = (
         "",
         "Best Parameters:",
     ]
-    + [f"{key}: {value}" for key, value in model.best_params_.items()]
+    + [
+        f"{key}: {value} of {param_grid[key]}"
+        for key, value in model.best_params_.items()
+    ]
     + ["", "=" * 10, "", ""]
 )
 
