@@ -1,0 +1,29 @@
+
+LogisticRegression Model
+
+2022-03-05_17-43-31
+random_seed: 27
+polynomial_degrees: 3
+cv_splits: 5
+cv_repeats: 3
+
+Overall training accuracy: 0.993235 (0.020607)
+Overall test accuracy: 0.976890 (0.036118)
+
+==========
+
+SVC Model
+2022-03-06_15-12-25
+random_seed: 27
+cv_splits: 3
+cv_repeats: 3
+
+Overall training accuracy: 0.979857 (0.043215)
+Overall test accuracy: 0.963843 (0.057086)
+
+Best Parameters:
+classifier__C: 0.5
+classifier__coef0: 0.6
+classifier__degree: 5
+
+==========
