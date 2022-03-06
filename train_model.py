@@ -1,12 +1,12 @@
 from datetime import datetime
 from os.path import join as path_join, basename
 from glob import glob
+from sklearn.svm import SVC
 from tqdm import tqdm
 import numpy as np
 from joblib import dump as model_dump
 
 from sklearn.pipeline import Pipeline
-from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler, PolynomialFeatures
 from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold
 
@@ -14,25 +14,29 @@ data_dir = "data"
 results_dir = "results"
 models_dir = "models"
 
-classifier = LogisticRegression
+classifier = SVC
 
 
 class Configuration:
     random_seed = 27
-    polynomial_degrees = 3
     cv_splits = 2
     cv_repeats = 1
 
+    polynomial_degrees = 3
 
-param_grid = {}
+
+param_grid = {
+    "classifier__degree": [3],
+    "classifier__coef0": [0.1, 0.5, 1],
+    "classifier__C": [0.1, 0.5, 1],
+}
 
 
 def get_bool_value(value):
     return value == b"True"
 
 
-def date_filename():
-    return datetime.now().strftime(r"%Y-%m-%d_%H-%M-%S")
+run_datetime = datetime.now().strftime(r"%Y-%m-%d_%H-%M-%S")
 
 
 cv = RepeatedStratifiedKFold(
@@ -43,11 +47,13 @@ cv = RepeatedStratifiedKFold(
 
 model = GridSearchCV(
     Pipeline(
-        (
-            ["polynomial", PolynomialFeatures(degree=Configuration.polynomial_degrees)],
-            ["scaler", StandardScaler()],
-            ["classifier", classifier(max_iter=1000)],
-        ),
+        [
+            ("scaler", StandardScaler()),
+            (
+                "classifier",
+                classifier(kernel="poly", max_iter=100000),
+            ),
+        ],
     ),
     param_grid=param_grid,
     cv=cv,
@@ -93,12 +99,12 @@ for folder in glob(path_join(data_dir, "*")):
     accuracy[crop_type] = crop_accuracy
 
 
-model_dump(model, path_join(models_dir, "%s.model" % date_filename()))
+model_dump(model, path_join(models_dir, "%s.model" % run_datetime()))
 
 
 all_train_accuracies = []
 all_test_accuracies = []
-with open(path_join("results", "%s.csv" % date_filename()), "w") as output:
+with open(path_join("results", "%s.csv" % run_datetime()), "w") as output:
     output.write(
         "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
     )
@@ -117,7 +123,7 @@ with open(path_join("results", "%s.csv" % date_filename()), "w") as output:
 
 
 summary_strings = (
-    ["%s Model" % classifier.__name__, date_filename()]
+    ["%s Model" % classifier.__name__, run_datetime()]
     + [
         f"{key}: {value}"
         for key, value in vars(Configuration).items()
@@ -132,7 +138,7 @@ summary_strings = (
         "",
         "Best Parameters:",
     ]
-    + [f"{key}: {value}" for key, value in model.best_params_]
+    + [f"{key}: {value}" for key, value in model.best_params_.items()]
     + ["", "=" * 10, "", ""]
 )
 
