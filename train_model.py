@@ -1,6 +1,7 @@
 from datetime import datetime
 from os.path import join as path_join, basename
 from glob import glob
+from sklearn.decomposition import PCA
 
 
 from tqdm import tqdm
@@ -26,18 +27,18 @@ classifier = LogisticRegression
 class Configuration:
     random_seed = 27
 
-    hyper_cv_splits = 2
-    hyper_cv_repeats = 1
+    hyper_cv_splits = 3
+    hyper_cv_repeats = 3
 
-    test_cv_splits = 2
-    test_cv_repeats = 1
+    test_cv_splits = 3
+    test_cv_repeats = 3
 
-    solver = "lbfgs"
+    solver = "liblinear"
 
 
 param_grid = {
-    "classifier__C": [1],
-    "polynomial__degree": [3],
+    "classifier__C": [0.01, 0.1, 1],
+    "polynomial__degree": [3, 5],
 }
 
 
@@ -65,6 +66,7 @@ model = GridSearchCV(
         [
             ("polynomial", PolynomialFeatures()),
             ("scaler", StandardScaler()),
+            ("pca", PCA(n_components=0.95)),
             (
                 "classifier",
                 classifier(solver=Configuration.solver, max_iter=10000),
@@ -84,6 +86,10 @@ output.write(
 
 all_train_accuracies = []
 all_test_accuracies = []
+best_params = {
+    param: {value: 0 for value in param_values}
+    for param, param_values in param_grid.items()
+}
 
 for folder in glob(path_join(data_dir, "*")):
     crop_type = basename(folder)
@@ -119,6 +125,7 @@ for folder in glob(path_join(data_dir, "*")):
                 y,
                 scoring="accuracy",
                 return_train_score=True,
+                return_estimator=True,
                 cv=test_cv,
                 error_score="raise",
                 n_jobs=-1,
@@ -134,6 +141,10 @@ for folder in glob(path_join(data_dir, "*")):
         all_train_accuracies.append(train_accuracy)
         all_test_accuracies.append(test_accuracy)
 
+        for estimator in scores["estimator"]:
+            for param, value in estimator.best_params_.items():
+                best_params[param][value] += 1
+
         output.write(
             "%s,%s,%s,%s\n"
             % (
@@ -148,6 +159,17 @@ for folder in glob(path_join(data_dir, "*")):
 model_dump(model, path_join(models_dir, "%s.model" % run_datetime))
 
 output.close()
+
+
+def get_best_param_value(values: dict):
+    best_value = None
+    max_count = 0
+    for value, best_count in values.items():
+        if best_count > max_count:
+            best_value = value
+
+    return value
+
 
 summary_strings = (
     ["%s Model" % classifier.__name__, run_datetime]
@@ -166,8 +188,8 @@ summary_strings = (
         "Best Parameters:",
     ]
     + [
-        f"{key}: {value} of {param_grid[key]}"
-        for key, value in model.best_params_.items()
+        f"{key}: {get_best_param_value(values)} of {param_grid[key]}"
+        for key, values in best_params.items()
     ]
     + ["", "=" * 10, "", ""]
 )
