@@ -3,7 +3,6 @@ from os.path import join as path_join, basename
 from glob import glob
 from sklearn.decomposition import PCA
 
-
 from tqdm import tqdm
 import numpy as np
 from joblib import dump as model_dump
@@ -15,31 +14,21 @@ from sklearn.model_selection import (
     RepeatedStratifiedKFold,
     cross_validate,
 )
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 
 data_dir = "data"
 results_dir = "results"
 models_dir = "models"
 
-classifier = LogisticRegression
+classifier = RandomForestClassifier
 
 
 class Configuration:
     random_seed = 27
 
-    hyper_cv_splits = 3
-    hyper_cv_repeats = 3
-
-    test_cv_splits = 3
-    test_cv_repeats = 3
-
-    solver = "liblinear"
-
-
-param_grid = {
-    "classifier__C": [0.01, 0.1, 1],
-    "polynomial__degree": [3, 5],
-}
+    cv_splits = 5
+    cv_repeats = 3
+    n_estimators = 200
 
 
 def get_bool_value(value):
@@ -49,33 +38,20 @@ def get_bool_value(value):
 run_datetime = datetime.now().strftime(r"%Y-%m-%d_%H-%M-%S")
 
 
-hyper_cv = RepeatedStratifiedKFold(
-    n_splits=Configuration.hyper_cv_splits,
-    n_repeats=Configuration.hyper_cv_repeats,
+cv = RepeatedStratifiedKFold(
+    n_splits=Configuration.cv_splits,
+    n_repeats=Configuration.cv_repeats,
     random_state=Configuration.random_seed,
 )
 
-test_cv = RepeatedStratifiedKFold(
-    n_splits=Configuration.test_cv_splits,
-    n_repeats=Configuration.test_cv_repeats,
-    random_state=Configuration.random_seed,
-)
-
-model = GridSearchCV(
-    Pipeline(
-        [
-            ("polynomial", PolynomialFeatures()),
-            ("scaler", StandardScaler()),
-            ("pca", PCA(n_components=0.95)),
-            (
-                "classifier",
-                classifier(solver=Configuration.solver, max_iter=10000),
-            ),
-        ],
-    ),
-    param_grid=param_grid,
-    cv=hyper_cv,
-    n_jobs=-1,
+model = Pipeline(
+    [
+        ("scaler", StandardScaler()),
+        (
+            "classifier",
+            classifier(n_jobs=-1),
+        ),
+    ],
 )
 
 
@@ -125,8 +101,7 @@ for folder in glob(path_join(data_dir, "*")):
                 y,
                 scoring="accuracy",
                 return_train_score=True,
-                return_estimator=True,
-                cv=test_cv,
+                cv=cv,
                 error_score="raise",
                 n_jobs=-1,
             )
@@ -140,10 +115,6 @@ for folder in glob(path_join(data_dir, "*")):
 
         all_train_accuracies.append(train_accuracy)
         all_test_accuracies.append(test_accuracy)
-
-        for estimator in scores["estimator"]:
-            for param, value in estimator.best_params_.items():
-                best_params[param][value] += 1
 
         output.write(
             "%s,%s,%s,%s\n"
@@ -160,17 +131,6 @@ model_dump(model, path_join(models_dir, "%s.model" % run_datetime))
 
 output.close()
 
-
-def get_best_param_value(values: dict):
-    best_value = None
-    max_count = 0
-    for value, best_count in values.items():
-        if best_count > max_count:
-            best_value = value
-
-    return value
-
-
 summary_strings = (
     ["%s Model" % classifier.__name__, run_datetime]
     + [
@@ -185,13 +145,10 @@ summary_strings = (
         "Overall test accuracy: %f (%f)"
         % (np.mean(all_test_accuracies), np.std(all_test_accuracies)),
         "",
-        "Best Parameters:",
+        "=" * 10,
+        "",
+        "",
     ]
-    + [
-        f"{key}: {get_best_param_value(values)} of {param_grid[key]}"
-        for key, values in best_params.items()
-    ]
-    + ["", "=" * 10, "", ""]
 )
 
 print()
