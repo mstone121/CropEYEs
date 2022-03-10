@@ -11,7 +11,7 @@ results_dir = "results"
 models_dir = "models"
 
 
-def train_model(model, cv, label, collect_best_params=True):
+def train_model(model, cv, label, collect_best_params=False):
     output = open(path_join("results", "%s.csv" % label), "w")
     output.write(
         "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
