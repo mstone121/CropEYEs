@@ -131,16 +131,29 @@ def print_summary(
     )
 
     if param_grid and best_params:
-        summary_strings += ["Best Parameters:"] + [
-            f"{key}: {get_best_param_value(values)} of {param_grid[key]}"
-            for key, values in best_params.items()
-        ]
+        summary_strings += (
+            ["Best Parameters:"]
+            + [
+                f"{key}: {get_best_param_value(values)} of {param_grid[key]}"
+                for key, values in best_params.items()
+            ]
+            + [""]
+        )
 
-    summary_strings += ["=" * 10, "", ""]
+    summary_end = ["=" * 10, "", ""]
 
     print()
     for line in summary_strings:
         print(line)
 
+    if best_params:
+        pprint(best_params)
+
+    print(summary_end)
+
     with open(path_join("results", "summary.txt"), "a") as summary:
         summary.write("\n".join(summary_strings))
+        if best_params:
+            pprint(best_params, summary)
+
+        summary.write("\n".join(summary_end))
