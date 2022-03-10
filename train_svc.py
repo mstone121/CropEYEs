@@ -1,4 +1,5 @@
 from datetime import datetime
+from distutils.command.config import config
 
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -17,18 +18,13 @@ classifier = SVC
 
 configuration = {
     "random_seed": 27,
-    "cv_splits": 2,
-    "cv_repeats": 1,
-    "hyper_cv_splits": 2,
-    "hyper_cv_repeats": 1,
+    "cv_splits": 5,
+    "cv_repeats": 3,
     "pca_variance": 0.95,
-}
-
-
-param_grid = {
-    "classifier__C": [1, 10, 100, 1000],
-    "classifier__gamma": [1, 0.1, 0.001, 0.0001],
-    "classifier__kernel": ["poly", "rbf"],
+    "C": 1,
+    "gamma": 1,
+    "kernel": "poly",
+    "degree": 3,
 }
 
 
@@ -41,28 +37,24 @@ cv = RepeatedStratifiedKFold(
     random_state=configuration["random_seed"],
 )
 
-hyper_cv = RepeatedStratifiedKFold(
-    n_splits=configuration["hyper_cv_splits"],
-    n_repeats=configuration["hyper_cv_repeats"],
-    random_state=configuration["random_seed"],
-)
-
-model = GridSearchCV(
-    Pipeline(
-        [
-            ("scaler", StandardScaler()),
-            ("pca", PCA(n_components=configuration["pca_variance"])),
-            ("classifier", classifier()),
-        ],
-    ),
-    param_grid,
-    cv=hyper_cv,
+model = Pipeline(
+    [
+        ("scaler", StandardScaler()),
+        ("pca", PCA(n_components=configuration["pca_variance"])),
+        (
+            "classifier",
+            classifier(
+                kernel=configuration["kernel"],
+                C=configuration["C"],
+                gamma=configuration["gamma"],
+                degree=configuration["degree"],
+            ),
+        ),
+    ],
 )
 
 
-train_accs, test_accs, best_params = train_model(
-    model=model, cv=cv, label=run_datetime, collect_best_params=True
-)
+train_accs, test_accs = train_model(model=model, cv=cv, label=run_datetime)
 
 print_summary(
     label=run_datetime,
@@ -70,6 +62,4 @@ print_summary(
     configuration=configuration,
     train_accs=train_accs,
     test_accs=test_accs,
-    best_params=best_params,
-    param_grid=param_grid,
 )
