@@ -4,3 +4,4 @@ results
 models
 
 .DS_Store
+*.pyc
