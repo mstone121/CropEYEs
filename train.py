@@ -1,35 +1,28 @@
-from datetime import datetime
 from os.path import join as path_join, basename
 from glob import glob
-from sklearn.linear_model import LogisticRegression
-
-
 from tqdm import tqdm
-import numpy as np
 from joblib import dump as model_dump
+import numpy as np
 
-from sklearn.model_selection import RepeatedStratifiedKFold, cross_validate
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_validate
 
 data_dir = "data"
 results_dir = "results"
 models_dir = "models"
 
 
-def train_model(model, cv, label):
-    run_datetime = datetime.now().strftime(r"%Y-%m-%d_%H-%M-%S")
-
+def train_model(model, cv, label, collect_best_params=True):
     output = open(path_join("results", "%s.csv" % label), "w")
     output.write(
         "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
     )
 
-    all_train_accuracies = []
-    all_test_accuracies = []
+    all_train_accs = []
+    all_test_accs = []
+    best_params = {}
 
     for folder in glob(path_join(data_dir, "*")):
         crop_type = basename(folder)
-        crop_accuracy = {}
 
         csvs = glob(path_join(folder, "**", "*.csv"), recursive=True)
         for csv in tqdm(csvs, desc="Training with %s" % crop_type):
@@ -61,6 +54,7 @@ def train_model(model, cv, label):
                     y,
                     scoring="accuracy",
                     return_train_score=True,
+                    return_estimator=collect_best_params,
                     cv=cv,
                     error_score="raise",
                     n_jobs=-1,
@@ -70,27 +64,49 @@ def train_model(model, cv, label):
                 print(csv)
                 exit()
 
-            train_accuracy = np.mean(scores["train_score"])
-            test_accuracy = np.mean(scores["test_score"])
+            train_accs = scores["train_score"]
+            test_accs = scores["test_score"]
 
-            all_train_accuracies.append(train_accuracy)
-            all_test_accuracies.append(test_accuracy)
+            all_train_accs.extend(train_accs)
+            all_test_accs.extend(test_accs)
 
             output.write(
                 "%s,%s,%s,%s\n"
                 % (
                     crop_type,
                     basename(csv),
-                    train_accuracy,
-                    test_accuracy,
+                    np.mean(train_accs),
+                    np.mean(test_accs),
                 )
             )
+
+            if collect_best_params:
+                for estimator in scores["estimator"]:
+                    for param, value in estimator.best_params_.items():
+                        if not param in best_params:
+                            best_params[param] = {}
+
+                        if not value in best_params[param]:
+                            best_params[param][value] = 1
+                        else:
+                            best_params[param][value] += 1
 
     model_dump(model, path_join(models_dir, "%s.model" % label))
 
     output.close()
 
-    return [all_train_accuracies, all_test_accuracies]
+    return [all_train_accs, all_test_accs, best_params]
+
+
+def get_best_param_value(values: dict):
+    best_value = None
+    max_count = 0
+    for value, count in values.items():
+        if count > max_count:
+            max_count = count
+            best_value = value
+
+    return best_value
 
 
 def print_summary(
@@ -116,7 +132,8 @@ def print_summary(
 
     if param_grid and best_params:
         summary_strings += ["Best Parameters:"] + [
-            f"{key}: {value} of {param_grid[key]}" for key, value in best_params.items()
+            f"{key}: {get_best_param_value(values)} of {param_grid[key]}"
+            for key, values in best_params.items()
         ]
 
     summary_strings += ["=" * 10, "", ""]
