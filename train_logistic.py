@@ -51,6 +51,7 @@ train_accs, test_accs = train_model(model=model, cv=cv, label=run_datetime)
 
 print_summary(
     label=run_datetime,
+    model_name=classifier.__name__,
     configuration=configuration,
     train_accs=train_accs,
     test_accs=test_accs,
