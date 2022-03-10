@@ -2,6 +2,7 @@ from os.path import join as path_join, basename
 from glob import glob
 from tqdm import tqdm
 from joblib import dump as model_dump
+from pprint import pprint
 import numpy as np
 
 from sklearn.model_selection import cross_validate
@@ -95,7 +96,10 @@ def train_model(model, cv, label, collect_best_params=False):
 
     output.close()
 
-    return [all_train_accs, all_test_accs, best_params]
+    if collect_best_params:
+        return [all_train_accs, all_test_accs, best_params]
+
+    return [all_train_accs, all_test_accs]
 
 
 def get_best_param_value(values: dict):
@@ -140,7 +144,7 @@ def print_summary(
             + [""]
         )
 
-    summary_end = ["=" * 10, "", ""]
+    summary_end = "\n".join(["=" * 10, "", ""])
 
     print()
     for line in summary_strings:
@@ -156,4 +160,4 @@ def print_summary(
         if best_params:
             pprint(best_params, summary)
 
-        summary.write("\n".join(summary_end))
+        summary.write(summary_end)
