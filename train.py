@@ -12,7 +12,15 @@ results_dir = "results"
 models_dir = "models"
 
 
-def train_model(model, cv, label, collect_best_params=False):
+def train_model(
+    model,
+    cv,
+    label,
+    collect_best_params=False,
+    params_are_distributions=False,
+    use_numeric_labels=False,
+    break_early=False,
+):
     output = open(path_join("results", "%s.csv" % label), "w")
     output.write(
         "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
@@ -43,7 +51,11 @@ def train_model(model, cv, label, collect_best_params=False):
                         "bool",
                     ],
                 },
-                converters={6: lambda value: value == b"True"},
+                converters={
+                    6: (lambda value: value == b"True")
+                    if not use_numeric_labels
+                    else (lambda value: 1 if value == b"True" else 0)
+                },
                 unpack=True,
             )
             x = np.transpose(x)
@@ -84,33 +96,54 @@ def train_model(model, cv, label, collect_best_params=False):
             if collect_best_params:
                 for estimator in scores["estimator"]:
                     for param, value in estimator.best_params_.items():
-                        if not param in best_params:
-                            best_params[param] = {}
+                        if params_are_distributions:
+                            if not param in best_params:
+                                best_params[param] = []
 
-                        if not value in best_params[param]:
-                            best_params[param][value] = 1
-                        else:
-                            best_params[param][value] += 1
+                            best_params[param].append(value)
+
+                        else:  # Discrete param grid
+                            if not param in best_params:
+                                best_params[param] = {}
+
+                            if not value in best_params[param]:
+                                best_params[param][value] = 1
+                            else:
+                                best_params[param][value] += 1
+
+        if break_early:
+            print("Warning: breaking early")
+            break
 
     model_dump(model, path_join(models_dir, "%s.model" % label))
 
     output.close()
 
     if collect_best_params:
+        if params_are_distributions:
+            avg_best_params = {}
+            for param, values in best_params.items():
+                avg_best_params[param] = np.mean(values)
+
+            return [all_test_accs, all_test_accs, avg_best_params]
+
         return [all_train_accs, all_test_accs, best_params]
 
     return [all_train_accs, all_test_accs]
 
 
-def get_best_param_value(values: dict):
-    best_value = None
-    max_count = 0
-    for value, count in values.items():
-        if count > max_count:
-            max_count = count
-            best_value = value
+def get_best_param_value(values):
+    if type(values) is dict:
+        best_value = None
+        max_count = 0
+        for value, count in values.items():
+            if count > max_count:
+                max_count = count
+                best_value = value
 
-    return best_value
+        return best_value
+    else:  # probably a distribution
+        return values
 
 
 def print_summary(
