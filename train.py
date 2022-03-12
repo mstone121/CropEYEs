@@ -30,94 +30,99 @@ def train_model(
     all_test_accs = []
     best_params = {}
 
-    for folder in glob(path_join(data_dir, "*")):
-        crop_type = basename(folder)
+    try:
 
-        csvs = glob(path_join(folder, "**", "*.csv"), recursive=True)
-        for csv in tqdm(csvs, desc="Training with %s" % crop_type):
-            *x, y = np.loadtxt(
-                csv,
-                delimiter=",",
-                skiprows=1,
-                dtype={
-                    "names": ["R", "G", "B", "l", "a", "b", "Class"],
-                    "formats": [
-                        "float",
-                        "float",
-                        "float",
-                        "float",
-                        "float",
-                        "float",
-                        "bool",
-                    ],
-                },
-                converters={
-                    6: (lambda value: value == b"True")
-                    if not use_numeric_labels
-                    else (lambda value: 1 if value == b"True" else 0)
-                },
-                unpack=True,
-            )
-            x = np.transpose(x)
+        for folder in glob(path_join(data_dir, "*")):
+            crop_type = basename(folder)
 
-            try:
-                scores = cross_validate(
-                    model,
-                    x,
-                    y,
-                    scoring="accuracy",
-                    return_train_score=True,
-                    return_estimator=collect_best_params,
-                    cv=cv,
-                    error_score="raise",
-                    n_jobs=-1,
+            csvs = glob(path_join(folder, "**", "*.csv"), recursive=True)
+            for csv in tqdm(csvs, desc="Training with %s" % crop_type):
+                *x, y = np.loadtxt(
+                    csv,
+                    delimiter=",",
+                    skiprows=1,
+                    dtype={
+                        "names": ["R", "G", "B", "l", "a", "b", "Class"],
+                        "formats": [
+                            "float",
+                            "float",
+                            "float",
+                            "float",
+                            "float",
+                            "float",
+                            "bool",
+                        ],
+                    },
+                    converters={
+                        6: (lambda value: value == b"True")
+                        if not use_numeric_labels
+                        else (lambda value: 1 if value == b"True" else 0)
+                    },
+                    unpack=True,
                 )
-            except Exception as error:
-                print(error)
-                print(csv)
-                exit()
+                x = np.transpose(x)
 
-            train_accs = scores["train_score"]
-            test_accs = scores["test_score"]
+                try:
+                    scores = cross_validate(
+                        model,
+                        x,
+                        y,
+                        scoring="accuracy",
+                        return_train_score=True,
+                        return_estimator=collect_best_params,
+                        cv=cv,
+                        error_score="raise",
+                        n_jobs=-1,
+                    )
+                except Exception as error:
+                    print(error)
+                    print(csv)
+                    exit()
 
-            all_train_accs.extend(train_accs)
-            all_test_accs.extend(test_accs)
+                train_accs = scores["train_score"]
+                test_accs = scores["test_score"]
 
-            output.write(
-                "%s,%s,%s,%s\n"
-                % (
-                    crop_type,
-                    basename(csv),
-                    np.mean(train_accs),
-                    np.mean(test_accs),
+                all_train_accs.extend(train_accs)
+                all_test_accs.extend(test_accs)
+
+                output.write(
+                    "%s,%s,%s,%s\n"
+                    % (
+                        crop_type,
+                        basename(csv),
+                        np.mean(train_accs),
+                        np.mean(test_accs),
+                    )
                 )
-            )
 
-            if collect_best_params:
-                for estimator in scores["estimator"]:
-                    for param, value in estimator.best_params_.items():
-                        if params_are_distributions:
-                            if not param in best_params:
-                                best_params[param] = []
+                if collect_best_params:
+                    for estimator in scores["estimator"]:
+                        for param, value in estimator.best_params_.items():
+                            if params_are_distributions:
+                                if not param in best_params:
+                                    best_params[param] = []
 
-                            best_params[param].append(value)
+                                best_params[param].append(value)
 
-                        else:  # Discrete param grid
-                            if not param in best_params:
-                                best_params[param] = {}
+                            else:  # Discrete param grid
+                                if not param in best_params:
+                                    best_params[param] = {}
 
-                            if not value in best_params[param]:
-                                best_params[param][value] = 1
-                            else:
-                                best_params[param][value] += 1
+                                if not value in best_params[param]:
+                                    best_params[param][value] = 1
+                                else:
+                                    best_params[param][value] += 1
 
-        if break_early:
-            print("Warning: breaking early")
-            break
+            if break_early:
+                print("Warning: breaking early")
+                break
 
-    model_dump(model, path_join(models_dir, "%s.model" % label))
+        model_dump(model, path_join(models_dir, "%s.model" % label))
 
-    output.close()
+        output.close()
+
+    except KeyboardInterrupt:
+        print("Interrupting...")
 
     if collect_best_params:
         if params_are_distributions:
