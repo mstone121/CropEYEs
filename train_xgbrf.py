@@ -1,12 +1,11 @@
 from datetime import datetime
-from scipy.stats import uniform, randint
 
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.model_selection import RandomizedSearchCV, RepeatedStratifiedKFold
 
-from xgboost import XGBClassifier
+from xgboost import XGBRFClassifier
 
 
 from train import print_summary, train_model
@@ -15,20 +14,20 @@ data_dir = "data"
 results_dir = "results"
 models_dir = "models"
 
-classifier = XGBClassifier
+classifier = XGBRFClassifier
 
 
 configuration = {
     "random_seed": 27,
-    "cv_splits": 3,
-    "cv_repeats": 5,
+    "cv_splits": 5,
+    "cv_repeats": 3,
     "objective": "binary:logistic",
-    "colsample_bytree": 0.8493071412088892,
-    "gamma": 0.2466921548262684,
-    "learning_rate": 0.19308562020455775,
+    "n_estimators": 300,
+    "learning_rate": 0.2606759988756412,
+    "subsample": 0.8297720412850104,
+    "colsample_bynode": 0.7943780972507282,
+    "reg_lambda": 0.000511315193617651,
     "max_depth": 4,
-    "n_estimators": 124,
-    "subsample": 0.8368410436197263,
 }
 
 
@@ -41,6 +40,7 @@ cv = RepeatedStratifiedKFold(
     random_state=configuration["random_seed"],
 )
 
+
 model = Pipeline(
     [
         ("scaler", StandardScaler()),
@@ -52,13 +52,13 @@ model = Pipeline(
                 eval_metric="auc",
                 use_label_encoder=False,
                 random_state=configuration["random_seed"],
-                colsample_bytree=configuration["colsample_bytree"],
-                gamma=configuration["gamma"],
-                learning_rate=configuration["learning_rate"],
-                max_depth=configuration["max_depth"],
-                n_estimators=configuration["n_estimators"],
-                subsample=configuration["subsample"],
                 n_jobs=1,
+                n_estimators=configuration["n_estimators"],
+                learning_rate=configuration["learning_rate"],
+                subsample=configuration["subsample"],
+                colsample_bynode=configuration["colsample_bynode"],
+                reg_lambda=configuration["reg_lambda"],
+                max_depth=configuration["max_depth"],
             ),
         ),
     ],
