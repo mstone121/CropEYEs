@@ -19,7 +19,6 @@ def train_model(
     collect_best_params=False,
     params_are_distributions=False,
     use_numeric_labels=False,
-    break_early=False,
 ):
     output = open(path_join("results", "%s.csv" % label), "w")
     output.write(
@@ -113,16 +112,12 @@ def train_model(
                                 else:
                                     best_params[param][value] += 1
 
-            if break_early:
-                print("Warning: breaking early")
-                break
-
-        model_dump(model, path_join(models_dir, "%s.model" % label))
-
-        output.close()
-
     except KeyboardInterrupt:
         print("Interrupting...")
+
+    finally:
+        model_dump(model, path_join(models_dir, "%s.model" % label))
+        output.close()
 
     if collect_best_params:
         if params_are_distributions:
@@ -147,8 +142,9 @@ def get_best_param_value(values):
                 best_value = value
 
         return best_value
-    else:  # probably a distribution
-        return values
+
+    # else probably a distribution
+    return values
 
 
 def print_summary(
