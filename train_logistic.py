@@ -20,8 +20,6 @@ configuration = {
     "cv_splits": 5,
     "cv_repeats": 3,
     "poly_degree": 3,
-    "solver": "liblinear",
-    "C": 10,
 }
 
 
@@ -41,7 +39,7 @@ model = Pipeline(
         ("pca", PCA(n_components=0.95)),
         (
             "classifier",
-            classifier(solver=configuration["solver"], C=configuration["C"]),
+            classifier(),
         ),
     ],
 )
