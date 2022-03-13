@@ -19,11 +19,14 @@ def train_model(
     collect_best_params=False,
     params_are_distributions=False,
     use_numeric_labels=False,
+    row_count_on_csv=True,
 ):
+    columns = ["Crop Type", "Filename", "Accuracy", "Validation Accuray"]
+    if row_count_on_csv:
+        columns.append("Row Count")
+
     output = open(path_join("results", "%s.csv" % label), "w")
-    output.write(
-        "%s,%s,%s,%s\n" % ("Crop Type", "Filename", "Accuracy", "Validation Accuray")
-    )
+    output.write("%s\n" % ",".join(columns))
 
     all_train_accs = []
     all_test_accs = []
@@ -84,15 +87,17 @@ def train_model(
                 all_train_accs.extend(train_accs)
                 all_test_accs.extend(test_accs)
 
-                output.write(
-                    "%s,%s,%s,%s\n"
-                    % (
-                        crop_type,
-                        basename(csv),
-                        np.mean(train_accs),
-                        np.mean(test_accs),
-                    )
-                )
+                csv_row = [
+                    crop_type,
+                    basename(csv),
+                    np.mean(train_accs),
+                    np.mean(test_accs),
+                ]
+
+                if row_count_on_csv:
+                    csv_row.append(len(y))
+
+                output.write("%s\n" % ",".join([str(item) for item in csv_row]))
 
                 if collect_best_params:
                     for estimator in scores["estimator"]:
