@@ -21,7 +21,7 @@ def train_model(
     use_numeric_labels=False,
     row_count_on_csv=True,
 ):
-    columns = ["Crop Type", "Filename", "Accuracy", "Validation Accuray"]
+    columns = ["Crop Type", "Filename", "Accuracy", "Validation Accuracy"]
     if row_count_on_csv:
         columns.append("Row Count")
 
